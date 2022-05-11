@@ -4,6 +4,8 @@ import urllib.request, json
 from printree import ptree
 import sqlite3
 import random
+import logging
+
 
 class PointMetadata:
     def __init__(self, display_name, address, time):
@@ -21,6 +23,8 @@ class PointMetadata:
             k.append(self.address['state'])
         if 'county' in self.address:
             k.append(self.address['county'])
+        if 'district' in self.address:
+            k.append(self.address['district'])
         if 'city' in self.address:
             k.append(self.address['city'])
         if 'town' in self.address:
@@ -32,7 +36,7 @@ class PointMetadata:
         if 'village' in self.address:
             k.append(self.address['village'])
         if 'hamlet' in self.address:
-           k.append(self.address['hamlet'])
+            k.append(self.address['hamlet'])
         # if 'road' in self.address:
         #     k.append(self.address['road'])
         # if 'highway' in self.address:
@@ -44,30 +48,42 @@ class PointMetadata:
 
 
 class OMGPXTools:
+
     def __init__(self, fileName):
-        gpx_file = open(fileName, 'r', encoding='UTF-8')
-        self.gpx = gpxpy.parse(gpx_file)
         self.connect = sqlite3.connect("geodata-cache.sqlite")
         try:
             self.connect.execute("""
-                    CREATE TABLE GEODATA (
+                    CREATE TABLE IF NOT EXISTS GEODATA (
                         lat number(3, 8) ,
                         lon number(3, 8) ,
                         geodata_json TEXT
                     );
                 """)
+            logging.info("Success: CREATE TABLE IF NOT EXISTS GEODATA")
+            self.connect.execute("CREATE UNIQUE INDEX IF NOT EXISTS GEODATA_IDX ON GEODATA (lat, lon)")
+            logging.info("Success: CREATE UNIQUE INDEX IF NOT EXISTS GEODATA_IDX ON GEODATA")
         except Exception as ex:
-            print("possibly table GEODATA  already exists ", ex)
-            dataFromSql = self.connect.execute("SELECT * FROM GEODATA");
+            logging.warning("possibly table GEODATA already exists: {}".format(ex))
+            dataFromSql = self.connect.execute("SELECT count(*) FROM GEODATA");
             for row in dataFromSql.fetchall():
-                print(row)
+                logging.debug(str(row))
+                pass
+
+        self.fileName = fileName
+        gpx_file = open(fileName, 'r', encoding='UTF-8')
+        self.gpx = gpxpy.parse(gpx_file)
+        logging.info("parsed file {}".format(self.fileName))
 
     def listPoints(self):
         res = {}
         lPrevoius = 0
+        pointsCount = 0
         for track in self.gpx.tracks:
             for segment in track.segments:
                 for point in segment.points:
+                    pointsCount += 1
+                    if (pointsCount % 1000 == 0):
+                        logging.debug("parsed {} points from file {}".format(pointsCount, self.fileName))
                     try:
                         pmd = self.getPointMetadata(point.latitude, point.longitude, point.time)
                         # print(pmd.display_name)
@@ -81,26 +97,26 @@ class OMGPXTools:
                             pass
                         lPrevoius = len(res)
                     except Exception as theException:
-                        print("да и похуй...", theException, point)
+                        print("не будем разбираться что там за эксепшен...", theException, point)
 
         return res
 
     def getPointMetadata(self, lat, lon, time):
         dataFromSql = self.connect.execute("SELECT geodata_json FROM GEODATA WHERE lat=? and lon=?", ([lat, lon]))
         fetchall = dataFromSql.fetchall()
-        if len(fetchall)>0:
+        if len(fetchall) > 0:
             strFromCache = fetchall[0][0]
             return self.parsePointMetadataFromString(strFromCache, time)
 
-        if random.randint(0, 1000) < 995:
+        if random.randint(0, 1000) < 990:
             return PointMetadata('display_name', {}, time)
 
         nominatimUrl = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat={}&lon={}".format(lat, lon)
         with urllib.request.urlopen(nominatimUrl) as url:
             strFromServer = url.read().decode()
-            print("fetch from {}: {}".format(nominatimUrl, strFromServer))
+            logging.debug("fetch from {}: {}".format(nominatimUrl, strFromServer))
             insertResult = self.connect.execute("INSERT INTO GEODATA (lat, lon, geodata_json) values (?,?,?)",
-                                 ([lat, lon, strFromServer]))
+                                                ([lat, lon, strFromServer]))
             self.connect.commit()
             return self.parsePointMetadataFromString(strFromServer, time)
 
@@ -122,9 +138,23 @@ class OMGPXTools:
 
 
 if __name__ == "__main__":
-    gpx = OMGPXTools("yar-kineshma-1.gpx")
-    finalResult = gpx.listPoints()
-    l = list(x.key() for x in finalResult.values())
-    dict = gpx.generatePrintableTree(l)
-    print(ptree(dict))
-    #print(json.dumps(finalResult, default=vars))
+    logging.basicConfig(filename='om-gpx-geodecode.log', level=logging.DEBUG, filemode="w", encoding="UTF-8")
+
+    for filename in ["_1_.gpx",
+                     "_2_happy_grader_day.gpx",
+                     "_3_.gpx",
+                     "_3_ (1).gpx",
+                     "_4_.gpx",
+                     "_4_ (1).gpx",
+                     "_5_.gpx",
+                     "_5_ (1).gpx",
+                     "_6_.gpx",
+                     "_6_ (1).gpx"]:
+        gpx = OMGPXTools(filename)
+        finalResult = gpx.listPoints()
+        l = list(x.key() for x in finalResult.values())
+        dict = gpx.generatePrintableTree(l)
+        print(filename)
+        print(ptree(dict))
+        logging.info("END")
+    
