@@ -5,6 +5,7 @@ from printree import ptree
 import sqlite3
 import random
 import logging
+import os
 
 
 class PointMetadata:
@@ -47,10 +48,47 @@ class PointMetadata:
         return "[{}, {}, {}, {}]".format(self.key(), self.display_name, self.address, self.time)
 
 
-class OMGPXTools:
+class GPXRendererStats:
+    def __init__(self, file_name):
+        self.file_name = file_name
+        self.counterCache = 0
+        self.counterGeocode = 0
+        self.tracks = 0
+        self.segments = 0
+        self.points = 0
 
-    def __init__(self, fileName):
+    def add_cache(self):
+        self.counterCache += 1
+
+    def add_geocoder(self):
+        self.counterGeocode += 1
+
+    def add_tracks(self):
+        self.tracks += 1
+
+    def add_segments(self):
+        self.segments += 1
+
+    def add_points(self):
+        self.points += 1
+        if (self.points % 1000 == 0):
+            logging.debug("parsed {} points from file {}".format(self.points, self.file_name))
+
+    def __str__(self):
+        return "Stats: file={}, cache={}, geocoder={}, tracks={}, segments={}, points={}".format(
+            self.file_name,
+            self.counterCache,
+            self.counterGeocode,
+            self.tracks,
+            self.segments,
+            self.points)
+
+
+class OMGPXTools:
+    def __init__(self, file_name):
         self.connect = sqlite3.connect("geodata-cache.sqlite")
+        self.stats = GPXRendererStats(file_name)
+        self.file_name = file_name
         try:
             self.connect.execute("""
                     CREATE TABLE IF NOT EXISTS GEODATA (
@@ -69,21 +107,20 @@ class OMGPXTools:
                 logging.debug(str(row))
                 pass
 
-        self.fileName = fileName
-        gpx_file = open(fileName, 'r', encoding='UTF-8')
+        gpx_file = open(file_name, 'r', encoding='UTF-8')
         self.gpx = gpxpy.parse(gpx_file)
-        logging.info("parsed file {}".format(self.fileName))
+        logging.info("parsed file {}".format(self.file_name))
 
     def listPoints(self):
         res = {}
         lPrevoius = 0
         pointsCount = 0
         for track in self.gpx.tracks:
+            self.stats.add_tracks()
             for segment in track.segments:
+                self.stats.add_segments()
                 for point in segment.points:
-                    pointsCount += 1
-                    if (pointsCount % 1000 == 0):
-                        logging.debug("parsed {} points from file {}".format(pointsCount, self.fileName))
+                    self.stats.add_points()
                     try:
                         pmd = self.getPointMetadata(point.latitude, point.longitude, point.time)
                         # print(pmd.display_name)
@@ -99,6 +136,7 @@ class OMGPXTools:
                     except Exception as theException:
                         print("не будем разбираться что там за эксепшен...", theException, point)
 
+        logging.info(str(self.stats))
         return res
 
     def getPointMetadata(self, lat, lon, time):
@@ -106,6 +144,7 @@ class OMGPXTools:
         fetchall = dataFromSql.fetchall()
         if len(fetchall) > 0:
             strFromCache = fetchall[0][0]
+            self.stats.add_cache()
             return self.parsePointMetadataFromString(strFromCache, time)
 
         if random.randint(0, 1000) < 990:
@@ -118,6 +157,7 @@ class OMGPXTools:
             insertResult = self.connect.execute("INSERT INTO GEODATA (lat, lon, geodata_json) values (?,?,?)",
                                                 ([lat, lon, strFromServer]))
             self.connect.commit()
+            self.stats.add_geocoder()
             return self.parsePointMetadataFromString(strFromServer, time)
 
     def parsePointMetadataFromString(self, decodedSring, time):
@@ -140,21 +180,17 @@ class OMGPXTools:
 if __name__ == "__main__":
     logging.basicConfig(filename='om-gpx-geodecode.log', level=logging.DEBUG, filemode="w", encoding="UTF-8")
 
-    for filename in ["_1_.gpx",
-                     "_2_happy_grader_day.gpx",
-                     "_3_.gpx",
-                     "_3_ (1).gpx",
-                     "_4_.gpx",
-                     "_4_ (1).gpx",
-                     "_5_.gpx",
-                     "_5_ (1).gpx",
-                     "_6_.gpx",
-                     "_6_ (1).gpx"]:
-        gpx = OMGPXTools(filename)
-        finalResult = gpx.listPoints()
-        l = list(x.key() for x in finalResult.values())
-        dict = gpx.generatePrintableTree(l)
-        print(filename)
-        print(ptree(dict))
-        logging.info("END")
-    
+    for filename in os.listdir("."):
+        logging.debug("file found: {}".format(filename))
+        if filename.endswith(".gpx"):
+            gpx = OMGPXTools(filename)
+            finalResult = gpx.listPoints()
+            l = list(x.key() for x in finalResult.values())
+            dict = gpx.generatePrintableTree(l)
+            print(filename)
+            print(ptree(dict))
+        else:
+            logging.debug("skip file as non GPX: {}".format(filename))
+
+    logging.info("END")
+    # print(json.dumps(finalResult, default=vars))
