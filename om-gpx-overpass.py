@@ -13,22 +13,6 @@ def set_default(obj):
     raise TypeError("Unknown type: {} {}".format(obj, type(obj)))
 
 
-# class WaterwayData:
-#     def __init__(self, name, waterway, wikipedia):
-#         self.name = name
-#         self.waterway = waterway
-#         self.wikipedia = wikipedia
-#
-#     def __repr__(self):
-#         return "[{}, {}, {}]".format(self.name, self.waterway, self.wikipedia)
-#
-#     def __hash__(self):
-#         return hash(self.name)
-#
-#     def __eq__(self, other):
-#         return self.name == other.name
-
-
 class WaterwaysReader:
     def __init__(self, gpx_filename):
         self.gpx_filename = gpx_filename
