@@ -4,9 +4,9 @@ Oleg Machulskiy gpx tools python
 
 ## Getting started
 
-tool to create  list of places visited in GPX track
-output looks like this: 
-
+tool to create  list of places visited in GPX track.
+Script output looks like the following: 
+~~~
 ┐
 └── Deutschland
     └── Hessen
@@ -44,6 +44,7 @@ output looks like this:
             │   └── Dreieich
             ├── Neu-Isenburg
             └── Frankfurt am Main
+~~~
 
 ## Support 
 
