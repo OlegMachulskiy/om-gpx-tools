@@ -63,10 +63,11 @@ class WaterwaysReader:
         result = self.api.query(query_string)
         logging.debug(result)
 
-        rivers = set()
+        rivers = []
         for way in result.ways:
             river = way.tags.get("waterway", "n/a") + " " + way.tags.get("name", "n/a")
-            rivers.add(river)
+            if river not in rivers:
+                rivers.add(river)
             logging.debug("parsed rivers={}, source={}".format(rivers, way.tags))
         return rivers
 
@@ -75,33 +76,35 @@ class WaterwaysReader:
         fetchall = dataFromSql.fetchall()
         if len(fetchall) > 0:
             str_from_cache = fetchall[0][0]
-            set_of_rivers = json.loads(str_from_cache)
-            return set(set_of_rivers)
+            list_of_rivers = json.loads(str_from_cache)
+            return set(list_of_rivers)
 
         if random.randint(0, 1000) < 995:
             return set()
 
         try:
-            set_of_rivers = self.read_river_names(lat, lon, 0.05)
-            dumps = json.dumps(set_of_rivers, default=set_default)
+            list_of_rivers = self.read_river_names(lat, lon, 0.05)
+            dumps = json.dumps(list_of_rivers)
             self.connect.execute("INSERT INTO RIVERS_DATA (lat, lon, geodata_json) values (?,?,?)",
                                  ([lat, lon, dumps]))
             self.connect.commit()
-            return set_of_rivers
+            return list_of_rivers
         except Exception as ex:
             logging.warning("Exception : {}, returning empty set".format(ex))
-            return set()
+            return []
 
     def read_all_river_names(self):
-        result = set()
+        result = []
         for track in self.gpx.tracks:
             for segment in track.segments:
                 for point in segment.points:
                     try:
                         pmd = self.get_river_names(point.latitude, point.longitude)
-                        if len(pmd)>0:
+                        if len(pmd) > 0:
                             logging.debug("get_river_names: {} {} : {}".format(point.latitude, point.longitude, pmd))
-                        result = result.union(pmd)
+                        for riverName in pmd:
+                            if riverName not in result:
+                                result.append(riverName)
                         logging.debug("result = {}".format(result))
                     except Exception as theException:
                         print("не будем разбираться что там за эксепшен...", theException, point)
@@ -120,7 +123,7 @@ if __name__ == "__main__":
             # rivers = wr.read_river_names(lat=55.69453, lon=37.55680, distance=0.01)
 
             print(filename)
-            for i in sorted(rivers):
+            for i in rivers:
                 print("\t{}".format(i))
 
         else:
