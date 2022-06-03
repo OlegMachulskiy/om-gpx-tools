@@ -67,7 +67,7 @@ class WaterwaysReader:
         for way in result.ways:
             river = way.tags.get("waterway", "n/a") + " " + way.tags.get("name", "n/a")
             if river not in rivers:
-                rivers.add(river)
+                rivers.append(river)
             logging.debug("parsed rivers={}, source={}".format(rivers, way.tags))
         return rivers
 
@@ -80,7 +80,7 @@ class WaterwaysReader:
             return set(list_of_rivers)
 
         if random.randint(0, 1000) < 995:
-            return set()
+            return []
 
         try:
             list_of_rivers = self.read_river_names(lat, lon, 0.05)
