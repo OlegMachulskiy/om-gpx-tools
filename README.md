@@ -1,6 +1,7 @@
 # om-gpx-tools
 
 Oleg Machulskiy gpx tools python
+put your gpx files into root dir and run scripts
 
 ## Getting started
 
