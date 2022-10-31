@@ -1,7 +1,9 @@
 # om-gpx-tools
 
 Oleg Machulskiy gpx tools python
-put your gpx files into root dir and run scripts
+put your gpx track files into root dir and run scripts.
+transcribes tracks to stdout
+
 
 ## Getting started
 
